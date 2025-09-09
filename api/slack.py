@@ -181,37 +181,57 @@ def format_deadline_response(deadlines, conference_name):
     return {"response_type": "in_channel", "blocks": blocks}
 
 
-def handler(request):
-    """Vercel serverless function handler for Slack commands."""
-    try:
-        # Parse form data
-        content_length = int(request.headers.get("Content-Length", 0))
-        post_data = request.rfile.read(content_length)
-        form_data = parse_qs(post_data.decode("utf-8"))
+from http.server import BaseHTTPRequestHandler
+import json
 
-        command = form_data.get("command", [""])[0]
-        text = form_data.get("text", [""])[0].strip()
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        """Handle POST requests from Slack."""
+        try:
+            # Parse form data
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+            form_data = parse_qs(post_data.decode("utf-8"))
 
-        # Extract conference name
-        if command.startswith("/"):
-            conference_key = command[1:].lower()
-        else:
-            conference_key = text.lower() if text else ""
+            command = form_data.get("command", [""])[0]
+            text = form_data.get("text", [""])[0].strip()
 
-        conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
+            # Extract conference name
+            if command.startswith("/"):
+                conference_key = command[1:].lower()
+            else:
+                conference_key = text.lower() if text else ""
 
-        # Fetch and process data
-        conferences_data = fetch_conference_data()
-        if not conferences_data:
-            response = {
-                "response_type": "ephemeral",
-                "text": "Sorry, I could not fetch conference data at the moment.",
-            }
-        else:
-            deadlines = find_conference_deadlines(conference_name, conferences_data)
-            response = format_deadline_response(deadlines, conference_name)
+            conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
 
-        return response
+            # Fetch and process data
+            conferences_data = fetch_conference_data()
+            if not conferences_data:
+                response = {
+                    "response_type": "ephemeral",
+                    "text": "Sorry, I could not fetch conference data at the moment.",
+                }
+            else:
+                deadlines = find_conference_deadlines(conference_name, conferences_data)
+                response = format_deadline_response(deadlines, conference_name)
 
-    except Exception as e:
-        return {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
+            # Send response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+
+        except Exception as e:
+            # Send error response
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            error_response = {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
+            self.wfile.write(json.dumps(error_response).encode())
+    
+    def do_GET(self):
+        """Handle GET requests."""
+        self.send_response(405)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())
