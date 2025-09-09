@@ -158,7 +158,28 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8")
+            # Temporary debug: log headers and raw body to function logs
+            try:
+                import sys
+
+                print(
+                    "[slack] headers:", dict(self.headers), file=sys.stdout, flush=True
+                )
+                print("[slack] raw body:", body, file=sys.stdout, flush=True)
+            except Exception:
+                pass
             form = parse_qs(body)
+            try:
+                import sys
+
+                print(
+                    "[slack] form:",
+                    {k: v for k, v in form.items()},
+                    file=sys.stdout,
+                    flush=True,
+                )
+            except Exception:
+                pass
             command = (form.get("command", [""])[0] or "").strip()
             raw_text = (form.get("text", [""])[0] or "").strip()
             tokens = [t for t in raw_text.split() if t]
@@ -186,6 +207,21 @@ class handler(BaseHTTPRequestHandler):
                         ).encode()
                     )
                     return
+            try:
+                import sys
+
+                print(
+                    "[slack] parsed -> command=",
+                    command,
+                    "raw_text=",
+                    raw_text,
+                    "key=",
+                    key,
+                    file=sys.stdout,
+                    flush=True,
+                )
+            except Exception:
+                pass
             name = CONFERENCE_MAPPINGS.get(key, key)
 
             data = fetch_conference_data()
