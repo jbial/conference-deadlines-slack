@@ -159,22 +159,26 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8")
             form = parse_qs(body)
-            command = form.get("command", [""])[0]
+            command = (form.get("command", [""])[0] or "").strip()
             text = (form.get("text", [""])[0] or "").strip()
-            # Prefer user text for commands like "/deadline iclr"; fallback to command name for "/iclr"
+            # Force text to win for patterns like "/deadline iclr". If empty, only then consider the command.
             if text:
-                key = text.lower()
+                key = text.split()[0].lower()
             else:
-                # Only fall back to command name if the command itself is the query (e.g. "/iclr").
-                # If the command is our slash command (e.g. "/deadline"), leave empty to trigger usage help.
-                if (
-                    command
-                    and command.startswith("/")
-                    and command.lower() not in {"/deadline", "/deadlines"}
-                ):
+                if command and command.startswith("/") and command.lower() not in {"/deadline", "/deadlines"}:
                     key = command[1:].lower()
                 else:
-                    key = ""
+                    # No query provided – return usage help
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(
+                        json.dumps({
+                            "response_type": "ephemeral",
+                            "text": "Usage: /deadline <conf>. Try: iclr, neurips, cvpr, icml, aaai, acl, emnlp",
+                        }).encode()
+                    )
+                    return
             name = CONFERENCE_MAPPINGS.get(key, key)
 
             data = fetch_conference_data()
