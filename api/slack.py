@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -194,68 +195,55 @@ def format_deadline_response(
     return {"response_type": "in_channel", "blocks": blocks}
 
 
-from http.server import BaseHTTPRequestHandler
-import json
-from urllib.parse import parse_qs
-
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        """Handle POST requests from Slack."""
-        try:
-            # Get content length
-            content_length = int(self.headers['Content-Length'])
-            
-            # Read the raw data
-            post_data = self.rfile.read(content_length)
-            
-            # Parse form data
-            form_data = parse_qs(post_data.decode('utf-8'))
-            
-            command = form_data.get("command", [""])[0]
-            text = form_data.get("text", [""])[0].strip()
-
-            # Extract conference name from command or text
-            if command.startswith("/"):
-                conference_key = command[1:].lower()
-            else:
-                conference_key = text.lower() if text else ""
-
-            # Map to full conference name
-            conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
-
-            # Fetch conference data
-            conferences_data = fetch_conference_data()
-            if not conferences_data:
-                response = {
-                    "response_type": "ephemeral",
-                    "text": "Sorry, I could not fetch conference data at the moment.",
-                }
-            else:
-                # Find deadlines
-                deadlines = find_conference_deadlines(conference_name, conferences_data)
-                # Format response
-                response = format_deadline_response(deadlines, conference_name)
-
-            # Send response
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
-            
-        except Exception as e:
-            # Send error response
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            error_response = {
-                "response_type": "ephemeral",
-                "text": f"An error occurred: {str(e)}"
+def handler(request):
+    """Vercel serverless function handler for Slack commands."""
+    try:
+        if request.method != "POST":
+            return {
+                "statusCode": 405,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Method not allowed"}),
             }
-            self.wfile.write(json.dumps(error_response).encode())
-    
-    def do_GET(self):
-        """Handle GET requests."""
-        self.send_response(405)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())
+
+        # Parse form data
+        form_data = request.form
+
+        command = form_data.get("command", "")
+        text = form_data.get("text", "").strip()
+
+        # Extract conference name from command or text
+        if command.startswith("/"):
+            conference_key = command[1:].lower()
+        else:
+            conference_key = text.lower() if text else ""
+
+        # Map to full conference name
+        conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
+
+        # Fetch conference data
+        conferences_data = fetch_conference_data()
+        if not conferences_data:
+            response = {
+                "response_type": "ephemeral",
+                "text": "Sorry, I could not fetch conference data at the moment.",
+            }
+        else:
+            # Find deadlines
+            deadlines = find_conference_deadlines(conference_name, conferences_data)
+            # Format response
+            response = format_deadline_response(deadlines, conference_name)
+
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(response),
+        }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
+            ),
+        }
