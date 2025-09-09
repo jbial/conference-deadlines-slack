@@ -1,8 +1,8 @@
+import hashlib
+import hmac
 import json
 import logging
 import os
-import hmac
-import hashlib
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
@@ -115,62 +115,32 @@ def format_deadline_response(deadlines, conference_name):
             "response_type": "ephemeral",
             "text": f"No deadlines found for {conference_name}. Try: iclr, nips, cvpr, icml, aaai, acl, emnlp",
         }
-    blocks = [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"{conference_name.upper()} Conference Deadlines",
-            },
-        },
-        {"type": "divider"},
-    ]
+
+    # Concise code block (no emoji noise)
+    sections = []
     for d in deadlines[:3]:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{d['name']} {d['year']}*"},
-            }
-        )
-        details = []
+        lines = [f"{d.get('name','')} {d.get('year','')}"]
         if d.get("abstract_deadline"):
-            details.append(f"*Abstract:* {d['abstract_deadline']}")
+            lines.append(f"Abstract: {d['abstract_deadline']}")
         if d.get("date"):
-            details.append(f"*Paper:* {d['date']}")
-        if details:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "\n".join(details)},
-                }
-            )
-        info = []
-        if d.get("location"):
-            info.append(f"{d['location']}")
-        if d.get("venue"):
-            info.append(f"{d['venue']}")
+            lines.append(f"Paper:   {d['date']}")
         if d.get("timezone"):
-            info.append(f"TZ: {d['timezone']}")
-        if info:
-            blocks.append(
-                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(info)}}
-            )
+            lines.append(f"TZ:      {d['timezone']}")
+        if d.get("location"):
+            lines.append(f"Location: {d['location']}")
+        if d.get("venue"):
+            lines.append(f"Venue:   {d['venue']}")
         if d.get("link"):
-            blocks.append(
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "View Conference"},
-                            "url": d["link"],
-                            "action_id": f"view_{d['year']}",
-                        }
-                    ],
-                }
-            )
-        blocks.append({"type": "divider"})
-    return {"response_type": "in_channel", "blocks": blocks}
+            lines.append(f"Link:    {d['link']}")
+        sections.append("\n".join(lines))
+
+    code = "\n\n".join(sections)
+    return {
+        "response_type": "in_channel",
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"```{code}```"}}
+        ],
+    }
 
 
 class handler(BaseHTTPRequestHandler):
@@ -210,7 +180,9 @@ class handler(BaseHTTPRequestHandler):
                     self.end_headers()
                     return
                 basestring = f"v0:{ts}:{body}".encode()
-                digest = hmac.new(signing_secret.encode(), basestring, hashlib.sha256).hexdigest()
+                digest = hmac.new(
+                    signing_secret.encode(), basestring, hashlib.sha256
+                ).hexdigest()
                 expected = f"v0={digest}"
                 if not hmac.compare_digest(expected, sig):
                     self.send_response(401)
