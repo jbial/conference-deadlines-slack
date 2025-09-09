@@ -8,6 +8,10 @@
   ],
   "routes": [
     {
+      "src": "/api/ping",
+      "dest": "api/ping.py"
+    },
+    {
       "src": "/slack/command",
       "dest": "api/slack.py"
     },
