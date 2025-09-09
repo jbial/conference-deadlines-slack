@@ -132,16 +132,14 @@ def format_deadline_response(deadlines, conference_name):
 
     d = max(deadlines, key=latest_key)
     sections = []
-    {
-        # fallthrough to building one section below
-    }
     lines = [f"{d.get('name', '')} {d.get('year', '')}"]
+    tz = d.get("timezone") or ""
     if d.get("abstract_deadline"):
-        lines.append(f"Abstract: {d['abstract_deadline']}")
+        suffix = f" ({tz})" if tz else ""
+        lines.append(f"Abstract: {d['abstract_deadline']}{suffix}")
     if d.get("date"):
-        lines.append(f"Paper:   {d['date']}")
-    if d.get("timezone"):
-        lines.append(f"TZ:      {d['timezone']}")
+        suffix = f" ({tz})" if tz else ""
+        lines.append(f"Paper:   {d['date']}{suffix}")
     if d.get("location"):
         lines.append(f"Location: {d['location']}")
     if d.get("venue"):
