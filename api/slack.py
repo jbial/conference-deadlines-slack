@@ -1,4 +1,8 @@
+import hashlib
+import hmac
 import json
+import os
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +28,40 @@ CONFERENCE_MAPPINGS: Dict[str, str] = {
     "icassp": "ICASSP",
     "interspeech": "Interspeech",
 }
+
+
+def verify_slack_request(request):
+    """Verify that the request is actually from Slack."""
+    # Get the signature from headers
+    signature = request.headers.get("X-Slack-Signature", "")
+    timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
+
+    # Check if timestamp is recent (within 5 minutes)
+    if abs(time.time() - int(timestamp)) > 300:
+        return False
+
+    # Get the raw body
+    body = request.get_data()
+
+    # Create the signature base string
+    sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
+
+    # Get your signing secret from environment
+    signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
+    if not signing_secret:
+        # For now, skip verification if no secret is set
+        return True
+
+    # Create the expected signature
+    expected_signature = (
+        "v0="
+        + hmac.new(
+            signing_secret.encode(), sig_basestring.encode(), hashlib.sha256
+        ).hexdigest()
+    )
+
+    # Compare signatures
+    return hmac.compare_digest(expected_signature, signature)
 
 
 def fetch_conference_data() -> Optional[Dict[str, List[Dict[str, Any]]]]:
@@ -203,6 +241,14 @@ def handler(request):
                 "statusCode": 405,
                 "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({"error": "Method not allowed"}),
+            }
+
+        # Verify the request is from Slack (optional but recommended)
+        if not verify_slack_request(request):
+            return {
+                "statusCode": 401,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "Unauthorized"}),
             }
 
         # Parse form data
