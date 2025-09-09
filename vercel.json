@@ -8,12 +8,16 @@
   ],
   "routes": [
     {
-      "src": "/slack/command",
+      "src": "/api/slack",
       "dest": "/api/slack.py"
     },
     {
-      "src": "/health",
+      "src": "/api/health",
       "dest": "/api/health.py"
+    },
+    {
+      "src": "/api",
+      "dest": "/api/index.py"
     },
     {
       "src": "/",
