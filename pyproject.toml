@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conf-deadlines-slack"
+version = "0.1.0"
+description = "Slack app for ML conference deadlines"
+authors = [{name = "Jeffrey Lai", email = "jlai@utexas.edu"}]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "flask>=2.3.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.0",
+    "gunicorn>=21.2.0",
+]
+
+[tool.setuptools]
+py-modules = ["serve"]
