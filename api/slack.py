@@ -121,22 +121,34 @@ def format_deadline_response(deadlines, conference_name):
             "text": f"No deadlines found for {conference_name}. Try: iclr, nips, cvpr, icml, aaai, acl, emnlp",
         }
 
+    def latest_key(d):
+        y = d.get("year") or 0
+        ds = d.get("date") or ""
+        try:
+            t = datetime.fromisoformat(ds)
+        except Exception:
+            t = datetime.min
+        return (y, t)
+
+    d = max(deadlines, key=latest_key)
     sections = []
-    for d in deadlines[:3]:
-        lines = [f"{d.get('name', '')} {d.get('year', '')}"]
-        if d.get("abstract_deadline"):
-            lines.append(f"Abstract: {d['abstract_deadline']}")
-        if d.get("date"):
-            lines.append(f"Paper:   {d['date']}")
-        if d.get("timezone"):
-            lines.append(f"TZ:      {d['timezone']}")
-        if d.get("location"):
-            lines.append(f"Location: {d['location']}")
-        if d.get("venue"):
-            lines.append(f"Venue:   {d['venue']}")
-        if d.get("link"):
-            lines.append(f"Link:    {d['link']}")
-        sections.append("\n".join(lines))
+    {
+        # fallthrough to building one section below
+    }
+    lines = [f"{d.get('name', '')} {d.get('year', '')}"]
+    if d.get("abstract_deadline"):
+        lines.append(f"Abstract: {d['abstract_deadline']}")
+    if d.get("date"):
+        lines.append(f"Paper:   {d['date']}")
+    if d.get("timezone"):
+        lines.append(f"TZ:      {d['timezone']}")
+    if d.get("location"):
+        lines.append(f"Location: {d['location']}")
+    if d.get("venue"):
+        lines.append(f"Venue:   {d['venue']}")
+    if d.get("link"):
+        lines.append(f"Link:    {d['link']}")
+    sections.append("\n".join(lines))
 
     code = "\n\n".join(sections)
     return {
