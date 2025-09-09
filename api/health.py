@@ -1,16 +1,18 @@
 import json
+from http.server import BaseHTTPRequestHandler
 
-def handler(request):
-    """Health check endpoint."""
-    if request.method == "GET":
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"status": "healthy"})
-        }
-    else:
-        return {
-            "statusCode": 405,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Method not allowed"})
-        }
+
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        """Health check endpoint."""
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "healthy"}).encode())
+
+    def do_POST(self):
+        """Method not allowed."""
+        self.send_response(405)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())

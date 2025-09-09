@@ -233,63 +233,68 @@ def format_deadline_response(
     return {"response_type": "in_channel", "blocks": blocks}
 
 
-def handler(request):
-    """Vercel serverless function handler for Slack commands."""
-    try:
-        if request.method != "POST":
-            return {
-                "statusCode": 405,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Method not allowed"}),
-            }
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import parse_qs
 
-        # Verify the request is from Slack (optional but recommended)
-        if not verify_slack_request(request):
-            return {
-                "statusCode": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
 
-        # Parse form data
-        form_data = request.form
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        """Handle POST requests from Slack."""
+        try:
+            # Get content length
+            content_length = int(self.headers["Content-Length"])
 
-        command = form_data.get("command", "")
-        text = form_data.get("text", "").strip()
+            # Read the raw data
+            post_data = self.rfile.read(content_length)
 
-        # Extract conference name from command or text
-        if command.startswith("/"):
-            conference_key = command[1:].lower()
-        else:
-            conference_key = text.lower() if text else ""
+            # Parse form data
+            form_data = parse_qs(post_data.decode("utf-8"))
 
-        # Map to full conference name
-        conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
+            command = form_data.get("command", [""])[0]
+            text = form_data.get("text", [""])[0].strip()
 
-        # Fetch conference data
-        conferences_data = fetch_conference_data()
-        if not conferences_data:
-            response = {
+            # Extract conference name from command or text
+            if command.startswith("/"):
+                conference_key = command[1:].lower()
+            else:
+                conference_key = text.lower() if text else ""
+
+            # Map to full conference name
+            conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
+
+            # Fetch conference data
+            conferences_data = fetch_conference_data()
+            if not conferences_data:
+                response = {
+                    "response_type": "ephemeral",
+                    "text": "Sorry, I could not fetch conference data at the moment.",
+                }
+            else:
+                # Find deadlines
+                deadlines = find_conference_deadlines(conference_name, conferences_data)
+                # Format response
+                response = format_deadline_response(deadlines, conference_name)
+
+            # Send response
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+
+        except Exception as e:
+            # Send error response
+            self.send_response(500)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            error_response = {
                 "response_type": "ephemeral",
-                "text": "Sorry, I could not fetch conference data at the moment.",
+                "text": f"An error occurred: {str(e)}",
             }
-        else:
-            # Find deadlines
-            deadlines = find_conference_deadlines(conference_name, conferences_data)
-            # Format response
-            response = format_deadline_response(deadlines, conference_name)
+            self.wfile.write(json.dumps(error_response).encode())
 
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(response),
-        }
-
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(
-                {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
-            ),
-        }
+    def do_GET(self):
+        """Handle GET requests."""
+        self.send_response(405)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())
