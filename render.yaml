@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: conf-deadlines-slack
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn serve:app
-    envVars:
-      - key: PORT
-        value: 10000
