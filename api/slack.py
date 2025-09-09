@@ -165,7 +165,16 @@ class handler(BaseHTTPRequestHandler):
             if text:
                 key = text.lower()
             else:
-                key = command[1:].lower() if command.startswith("/") else ""
+                # Only fall back to command name if the command itself is the query (e.g. "/iclr").
+                # If the command is our slash command (e.g. "/deadline"), leave empty to trigger usage help.
+                if (
+                    command
+                    and command.startswith("/")
+                    and command.lower() not in {"/deadline", "/deadlines"}
+                ):
+                    key = command[1:].lower()
+                else:
+                    key = ""
             name = CONFERENCE_MAPPINGS.get(key, key)
 
             data = fetch_conference_data()
