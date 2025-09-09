@@ -19,6 +19,9 @@ if not LOGGER.handlers:
     _h.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     LOGGER.addHandler(_h)
 
+MAX_BODY_BYTES = 4096
+MAX_TEXT_CHARS = 64
+
 CONFERENCE_MAPPINGS = {
     "iclr": "ICLR",
     "nips": "NeurIPS",
@@ -38,6 +41,8 @@ CONFERENCE_MAPPINGS = {
     "icassp": "ICASSP",
     "interspeech": "Interspeech",
 }
+
+ALLOWED_KEYS = set(CONFERENCE_MAPPINGS.keys())
 
 
 def fetch_conference_data():
@@ -116,10 +121,9 @@ def format_deadline_response(deadlines, conference_name):
             "text": f"No deadlines found for {conference_name}. Try: iclr, nips, cvpr, icml, aaai, acl, emnlp",
         }
 
-    # Concise code block (no emoji noise)
     sections = []
     for d in deadlines[:3]:
-        lines = [f"{d.get('name','')} {d.get('year','')}"]
+        lines = [f"{d.get('name', '')} {d.get('year', '')}"]
         if d.get("abstract_deadline"):
             lines.append(f"Abstract: {d['abstract_deadline']}")
         if d.get("date"):
@@ -147,13 +151,11 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
-            # Cap body to 10 KB
-            if length > 10_000:
+            if length > MAX_BODY_BYTES:
                 self.send_response(413)
                 self.end_headers()
                 return
             body = self.rfile.read(length).decode("utf-8")
-            # Structured logging of request context
             try:
                 LOGGER.info("headers=%s", dict(self.headers))
                 LOGGER.info("raw_body=%s", body)
@@ -195,19 +197,13 @@ class handler(BaseHTTPRequestHandler):
                 pass
             command = (form.get("command", [""])[0] or "").strip()
             raw_text = (form.get("text", [""])[0] or "").strip()
-            tokens = [t for t in raw_text.split() if t]
-            if tokens and tokens[0].lstrip("/").lower() in {"deadline", "deadlines"}:
-                tokens = tokens[1:]
-            if tokens:
-                key = tokens[0].lower()
-            else:
-                if (
-                    command
-                    and command.startswith("/")
-                    and command.lower() not in {"/deadline", "/deadlines"}
-                ):
-                    key = command[1:].lower()
-                else:
+            if len(raw_text) > MAX_TEXT_CHARS:
+                self.send_response(413)
+                self.end_headers()
+                return
+
+            if command == "/deadline":
+                if not raw_text:
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
@@ -220,12 +216,28 @@ class handler(BaseHTTPRequestHandler):
                         ).encode()
                     )
                     return
+                key = raw_text.split()[0].lower()
+            else:
+                key = command[1:].lower() if command.startswith("/") else ""
             try:
                 LOGGER.info(
                     "parsed command=%s raw_text=%s key=%s", command, raw_text, key
                 )
             except Exception:
                 pass
+            # Validate requested key if provided
+            if key and key not in ALLOWED_KEYS:
+                suggestions = ", ".join(sorted(list(ALLOWED_KEYS))[:8])
+                resp = {
+                    "response_type": "ephemeral",
+                    "text": f"Unknown conference '{key}'. Try: {suggestions}",
+                }
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(resp).encode())
+                return
+
             name = CONFERENCE_MAPPINGS.get(key, key)
 
             data = fetch_conference_data()
