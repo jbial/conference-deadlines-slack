@@ -161,7 +161,11 @@ class handler(BaseHTTPRequestHandler):
             form = parse_qs(body)
             command = form.get("command", [""])[0]
             text = (form.get("text", [""])[0] or "").strip()
-            key = command[1:].lower() if command.startswith("/") else text.lower()
+            # Prefer user text for commands like "/deadline iclr"; fallback to command name for "/iclr"
+            if text:
+                key = text.lower()
+            else:
+                key = command[1:].lower() if command.startswith("/") else ""
             name = CONFERENCE_MAPPINGS.get(key, key)
 
             data = fetch_conference_data()
