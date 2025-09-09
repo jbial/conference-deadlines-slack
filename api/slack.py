@@ -150,7 +150,7 @@ def format_deadline_response(deadlines, conference_name):
 
     code = "\n\n".join(sections)
     return {
-        "response_type": "in_channel",
+        "response_type": "ephemeral",
         "blocks": [
             {"type": "section", "text": {"type": "mrkdwn", "text": f"```{code}```"}}
         ],
