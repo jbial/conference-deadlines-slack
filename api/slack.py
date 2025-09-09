@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from urllib.parse import parse_qs
 
@@ -182,7 +183,7 @@ def format_deadline_response(deadlines, conference_name):
 
 
 from http.server import BaseHTTPRequestHandler
-import json
+
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -217,21 +218,24 @@ class handler(BaseHTTPRequestHandler):
 
             # Send response
             self.send_response(200)
-            self.send_header('Content-type', 'application/json')
+            self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
 
         except Exception as e:
             # Send error response
             self.send_response(500)
-            self.send_header('Content-type', 'application/json')
+            self.send_header("Content-type", "application/json")
             self.end_headers()
-            error_response = {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
+            error_response = {
+                "response_type": "ephemeral",
+                "text": f"An error occurred: {str(e)}",
+            }
             self.wfile.write(json.dumps(error_response).encode())
-    
+
     def do_GET(self):
         """Handle GET requests."""
         self.send_response(405)
-        self.send_header('Content-type', 'application/json')
+        self.send_header("Content-type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())
