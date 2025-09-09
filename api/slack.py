@@ -1,10 +1,20 @@
 import json
+import logging
+import os
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs
 
 import requests
 import yaml
+
+LOGGER = logging.getLogger("conf_deadlines_slack")
+if not LOGGER.handlers:
+    _level = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOGGER.setLevel(getattr(logging, _level, logging.INFO))
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    LOGGER.addHandler(_h)
 
 CONFERENCE_MAPPINGS = {
     "iclr": "ICLR",
@@ -158,26 +168,15 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8")
-            # Temporary debug: log headers and raw body to function logs
+            # Structured logging of request context
             try:
-                import sys
-
-                print(
-                    "[slack] headers:", dict(self.headers), file=sys.stdout, flush=True
-                )
-                print("[slack] raw body:", body, file=sys.stdout, flush=True)
+                LOGGER.info("headers=%s", dict(self.headers))
+                LOGGER.info("raw_body=%s", body)
             except Exception:
                 pass
             form = parse_qs(body)
             try:
-                import sys
-
-                print(
-                    "[slack] form:",
-                    {k: v for k, v in form.items()},
-                    file=sys.stdout,
-                    flush=True,
-                )
+                LOGGER.info("form=%s", {k: v for k, v in form.items()})
             except Exception:
                 pass
             command = (form.get("command", [""])[0] or "").strip()
@@ -208,17 +207,8 @@ class handler(BaseHTTPRequestHandler):
                     )
                     return
             try:
-                import sys
-
-                print(
-                    "[slack] parsed -> command=",
-                    command,
-                    "raw_text=",
-                    raw_text,
-                    "key=",
-                    key,
-                    file=sys.stdout,
-                    flush=True,
+                LOGGER.info(
+                    "parsed command=%s raw_text=%s key=%s", command, raw_text, key
                 )
             except Exception:
                 pass
