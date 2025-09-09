@@ -3,7 +3,7 @@
   "functions": {
     "api/index.py": {
       "runtime": "@vercel/python",
-      "includeFiles": ["serve.py"]
+      "includeFiles": "serve.py"
     }
   },
   "routes": [
