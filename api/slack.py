@@ -1,9 +1,8 @@
 import json
-from datetime import datetime
-from urllib.parse import parse_qs
-
 import requests
 import yaml
+from datetime import datetime
+from urllib.parse import parse_qs
 
 CONFERENCE_MAPPINGS = {
     "iclr": "ICLR",
@@ -25,30 +24,14 @@ CONFERENCE_MAPPINGS = {
     "interspeech": "Interspeech",
 }
 
-
 def fetch_conference_data():
     """Fetch conference data from ai-deadlines repository."""
     conferences = {}
     conference_files = [
-        "iclr",
-        "nips",
-        "neurips",
-        "cvpr",
-        "icml",
-        "aaai",
-        "acl",
-        "emnlp",
-        "iccv",
-        "eccv",
-        "ijcai",
-        "kdd",
-        "www",
-        "recsys",
-        "wacv",
-        "icassp",
-        "interspeech",
+        "iclr", "nips", "neurips", "cvpr", "icml", "aaai", "acl", "emnlp",
+        "iccv", "eccv", "ijcai", "kdd", "www", "recsys", "wacv", "icassp", "interspeech"
     ]
-
+    
     for conf in conference_files:
         url = f"https://raw.githubusercontent.com/huggingface/ai-deadlines/main/src/data/conferences/{conf}.yml"
         try:
@@ -59,9 +42,8 @@ def fetch_conference_data():
                     conferences[conf] = data
         except Exception as e:
             print(f"Error fetching {conf} data: {e}")
-
+    
     return conferences if conferences else None
-
 
 def find_conference_deadlines(conference_name, conferences_data):
     """Find deadlines for a specific conference."""
@@ -70,7 +52,7 @@ def find_conference_deadlines(conference_name, conferences_data):
 
     current_year = datetime.now().year
     results = []
-
+    
     conference_key = conference_name.lower()
     if conference_key in conferences_data:
         for conf in conferences_data[conference_key]:
@@ -82,26 +64,21 @@ def find_conference_deadlines(conference_name, conferences_data):
                     "date": conf.get("deadline", ""),
                     "type": "Paper Submission",
                     "link": conf.get("link", ""),
-                    "location": f"{conf.get('city', '')}, {conf.get('country', '')}".strip(
-                        ", "
-                    ),
+                    "location": f"{conf.get('city', '')}, {conf.get('country', '')}".strip(", "),
                     "abstract_deadline": conf.get("abstract_deadline", ""),
                     "venue": conf.get("venue", ""),
                 }
-
+                
                 if "deadlines" in conf:
                     for deadline in conf["deadlines"]:
                         if deadline.get("type") == "abstract":
-                            deadline_info["abstract_deadline"] = deadline.get(
-                                "date", ""
-                            )
+                            deadline_info["abstract_deadline"] = deadline.get("date", "")
                         elif deadline.get("type") == "submission":
                             deadline_info["date"] = deadline.get("date", "")
-
+                
                 results.append(deadline_info)
-
+    
     return results
-
 
 def format_deadline_response(deadlines, conference_name):
     """Format deadlines into Slack Block Kit format."""
@@ -123,15 +100,13 @@ def format_deadline_response(deadlines, conference_name):
     ]
 
     for deadline in deadlines[:3]:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{deadline['name']} {deadline['year']}*",
-                },
-            }
-        )
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{deadline['name']} {deadline['year']}*",
+            },
+        })
 
         deadline_text = ""
         if deadline.get("abstract_deadline"):
@@ -140,12 +115,10 @@ def format_deadline_response(deadlines, conference_name):
             deadline_text += f"📄 *Paper:* {deadline['date']}\n"
 
         if deadline_text:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": deadline_text.strip()},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": deadline_text.strip()},
+            })
 
         info_text = ""
         if deadline.get("location"):
@@ -154,88 +127,60 @@ def format_deadline_response(deadlines, conference_name):
             info_text += f"🏢 {deadline['venue']}\n"
 
         if info_text:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": info_text.strip()},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": info_text.strip()},
+            })
 
         if deadline.get("link"):
-            blocks.append(
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "View Conference"},
-                            "url": deadline["link"],
-                            "action_id": f"view_conference_{deadline['year']}",
-                        }
-                    ],
-                }
-            )
+            blocks.append({
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "View Conference"},
+                        "url": deadline["link"],
+                        "action_id": f"view_conference_{deadline['year']}",
+                    }
+                ],
+            })
 
         if deadline != deadlines[-1]:
             blocks.append({"type": "divider"})
 
     return {"response_type": "in_channel", "blocks": blocks}
 
+def handler(request):
+    """Vercel serverless function handler for Slack commands."""
+    try:
+        # Parse form data
+        content_length = int(request.headers.get("Content-Length", 0))
+        post_data = request.rfile.read(content_length)
+        form_data = parse_qs(post_data.decode("utf-8"))
 
-from http.server import BaseHTTPRequestHandler
+        command = form_data.get("command", [""])[0]
+        text = form_data.get("text", [""])[0].strip()
 
+        # Extract conference name
+        if command.startswith("/"):
+            conference_key = command[1:].lower()
+        else:
+            conference_key = text.lower() if text else ""
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        """Handle POST requests from Slack."""
-        try:
-            # Parse form data
-            content_length = int(self.headers.get("Content-Length", 0))
-            post_data = self.rfile.read(content_length)
-            form_data = parse_qs(post_data.decode("utf-8"))
+        conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
 
-            command = form_data.get("command", [""])[0]
-            text = form_data.get("text", [""])[0].strip()
-
-            # Extract conference name
-            if command.startswith("/"):
-                conference_key = command[1:].lower()
-            else:
-                conference_key = text.lower() if text else ""
-
-            conference_name = CONFERENCE_MAPPINGS.get(conference_key, conference_key)
-
-            # Fetch and process data
-            conferences_data = fetch_conference_data()
-            if not conferences_data:
-                response = {
-                    "response_type": "ephemeral",
-                    "text": "Sorry, I could not fetch conference data at the moment.",
-                }
-            else:
-                deadlines = find_conference_deadlines(conference_name, conferences_data)
-                response = format_deadline_response(deadlines, conference_name)
-
-            # Send response
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
-
-        except Exception as e:
-            # Send error response
-            self.send_response(500)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            error_response = {
+        # Fetch and process data
+        conferences_data = fetch_conference_data()
+        if not conferences_data:
+            response = {
                 "response_type": "ephemeral",
-                "text": f"An error occurred: {str(e)}",
+                "text": "Sorry, I could not fetch conference data at the moment.",
             }
-            self.wfile.write(json.dumps(error_response).encode())
+        else:
+            deadlines = find_conference_deadlines(conference_name, conferences_data)
+            response = format_deadline_response(deadlines, conference_name)
 
-    def do_GET(self):
-        """Handle GET requests."""
-        self.send_response(405)
-        self.send_header("Content-type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps({"error": "Method not allowed"}).encode())
+        return response
+
+    except Exception as e:
+        return {"response_type": "ephemeral", "text": f"An error occurred: {str(e)}"}
