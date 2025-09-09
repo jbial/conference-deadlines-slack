@@ -2,26 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.py",
+      "src": "api/**/*.py",
       "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/slack",
-      "dest": "/api/slack.py"
-    },
-    {
-      "src": "/api/health",
-      "dest": "/api/health.py"
-    },
-    {
-      "src": "/api",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/",
-      "dest": "/api/index.py"
     }
   ]
 }
