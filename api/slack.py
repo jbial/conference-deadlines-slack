@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import hmac
+import hashlib
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs
@@ -90,13 +93,18 @@ def find_conference_deadlines(conference_name, conferences_data):
                     ),
                     "abstract_deadline": conf.get("abstract_deadline", ""),
                     "venue": conf.get("venue", ""),
+                    "timezone": conf.get("timezone") or conf.get("tz"),
                 }
                 if "deadlines" in conf:
                     for d in conf["deadlines"]:
                         if d.get("type") == "abstract":
                             info["abstract_deadline"] = d.get("date", "")
+                            if d.get("timezone") or d.get("tz"):
+                                info["timezone"] = d.get("timezone") or d.get("tz")
                         elif d.get("type") == "submission":
                             info["date"] = d.get("date", "")
+                            if d.get("timezone") or d.get("tz"):
+                                info["timezone"] = d.get("timezone") or d.get("tz")
                 results.append(info)
     return results
 
@@ -126,9 +134,9 @@ def format_deadline_response(deadlines, conference_name):
         )
         details = []
         if d.get("abstract_deadline"):
-            details.append(f"📝 *Abstract:* {d['abstract_deadline']}")
+            details.append(f"*Abstract:* {d['abstract_deadline']}")
         if d.get("date"):
-            details.append(f"📄 *Paper:* {d['date']}")
+            details.append(f"*Paper:* {d['date']}")
         if details:
             blocks.append(
                 {
@@ -138,9 +146,11 @@ def format_deadline_response(deadlines, conference_name):
             )
         info = []
         if d.get("location"):
-            info.append(f"📍 {d['location']}")
+            info.append(f"{d['location']}")
         if d.get("venue"):
-            info.append(f"🏢 {d['venue']}")
+            info.append(f"{d['venue']}")
+        if d.get("timezone"):
+            info.append(f"TZ: {d['timezone']}")
         if info:
             blocks.append(
                 {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(info)}}
@@ -167,6 +177,11 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
+            # Cap body to 10 KB
+            if length > 10_000:
+                self.send_response(413)
+                self.end_headers()
+                return
             body = self.rfile.read(length).decode("utf-8")
             # Structured logging of request context
             try:
@@ -174,6 +189,33 @@ class handler(BaseHTTPRequestHandler):
                 LOGGER.info("raw_body=%s", body)
             except Exception:
                 pass
+
+            # Slack signature verification (optional but recommended)
+            signing_secret = os.getenv("SLACK_SIGNING_SECRET")
+            if signing_secret:
+                ts = self.headers.get("X-Slack-Request-Timestamp")
+                sig = self.headers.get("X-Slack-Signature", "")
+                if not ts or not sig:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                try:
+                    ts_int = int(ts)
+                except Exception:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                if abs(int(time.time()) - ts_int) > 300:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                basestring = f"v0:{ts}:{body}".encode()
+                digest = hmac.new(signing_secret.encode(), basestring, hashlib.sha256).hexdigest()
+                expected = f"v0={digest}"
+                if not hmac.compare_digest(expected, sig):
+                    self.send_response(401)
+                    self.end_headers()
+                    return
             form = parse_qs(body)
             try:
                 LOGGER.info("form=%s", {k: v for k, v in form.items()})
